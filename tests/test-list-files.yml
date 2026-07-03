@@ -1,0 +1,76 @@
+name: Test list-files output formats
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_EVENT_NAME: push
+      GITHUB_REF: refs/heads/act-harness
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Create test files and commit them
+        id: setup
+        run: |
+          git config user.email "test@test.com"
+          git config user.name "Test"
+          # Capture the current HEAD SHA before making any changes
+          BASE_SHA=$(git rev-parse HEAD)
+          echo "base_sha=$BASE_SHA" >> "$GITHUB_OUTPUT"
+          echo "Base SHA: $BASE_SHA"
+          # Now commit source files
+          mkdir -p listfiles-src
+          echo "console.log('hello');" > listfiles-src/app.js
+          echo "export const x = 1;" > listfiles-src/utils.ts
+          git add listfiles-src/
+          git commit -m "add source files"
+          echo "New HEAD: $(git rev-parse HEAD)"
+
+      - id: filter
+        uses: .
+        with:
+          token: ""
+          base: ${{ steps.setup.outputs.base_sha }}
+          list-files: json
+          filters: |
+            src:
+              - '**/listfiles-src/**'
+
+      - name: Assert src filter matched
+        env:
+          SRC_MATCHED: ${{ steps.filter.outputs.src }}
+        run: |
+          echo "src matched: $SRC_MATCHED"
+          if [ "$SRC_MATCHED" != "true" ]; then
+            echo "FAIL: expected src filter to match"
+            exit 1
+          fi
+          echo "PASS"
+
+      - name: Assert src_files output is a valid JSON array with files
+        env:
+          SRC_FILES: ${{ steps.filter.outputs.src_files }}
+        run: |
+          echo "src_files: $SRC_FILES"
+          COUNT=$(echo "$SRC_FILES" | python3 -c "import sys, json; data = json.load(sys.stdin); print(len(data))")
+          echo "file count: $COUNT"
+          if [ "$COUNT" -lt "1" ]; then
+            echo "FAIL: expected at least 1 file in src_files"
+            exit 1
+          fi
+          echo "PASS: src_files contains $COUNT file(s)"
+
+      - name: Assert changes contains src
+        env:
+          CHANGES: ${{ steps.filter.outputs.changes }}
+        run: |
+          echo "changes: $CHANGES"
+          CONTAINS=$(echo "$CHANGES" | python3 -c "import sys, json; data = json.load(sys.stdin); print('yes' if 'src' in data else 'no')")
+          if [ "$CONTAINS" != "yes" ]; then
+            echo "FAIL: expected 'src' in changes array"
+            exit 1
+          fi
+          echo "PASS"

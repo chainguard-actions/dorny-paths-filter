@@ -1,0 +1,75 @@
+name: Test ref input for change detection
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_EVENT_NAME: push
+      GITHUB_REF: refs/heads/act-harness
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Set up git and create commits on a feature branch
+        id: setup
+        run: |
+          git config user.email "test@test.com"
+          git config user.name "Test"
+          # Capture the current HEAD SHA as the base
+          BASE_SHA=$(git rev-parse HEAD)
+          echo "base_sha=$BASE_SHA" >> "$GITHUB_OUTPUT"
+          echo "Base SHA: $BASE_SHA"
+          # Create a feature branch with a new file
+          git checkout -b test-ref-feature
+          echo "feature content" > ref-test-feature.txt
+          git add ref-test-feature.txt
+          git commit -m "add feature file on feature branch"
+          FEATURE_SHA=$(git rev-parse HEAD)
+          echo "feature_sha=$FEATURE_SHA" >> "$GITHUB_OUTPUT"
+          echo "Feature SHA: $FEATURE_SHA"
+          # Go back to act-harness branch
+          git checkout act-harness
+
+      - id: filter
+        uses: .
+        with:
+          token: ""
+          ref: ${{ steps.setup.outputs.feature_sha }}
+          base: ${{ steps.setup.outputs.base_sha }}
+          filters: |
+            feature:
+              - '**/ref-test-feature.txt'
+            docs:
+              - '**/*.md'
+
+      - name: Assert changes output is valid JSON array
+        env:
+          CHANGES: ${{ steps.filter.outputs.changes }}
+        run: |
+          echo "changes: $CHANGES"
+          echo "$CHANGES" | python3 -c "import sys, json; data = json.load(sys.stdin); assert isinstance(data, list), 'Expected JSON array'"
+          echo "PASS: changes is a valid JSON array"
+
+      - name: Assert feature filter matched
+        env:
+          FEATURE_MATCHED: ${{ steps.filter.outputs.feature }}
+        run: |
+          echo "feature matched: $FEATURE_MATCHED"
+          if [ "$FEATURE_MATCHED" != "true" ]; then
+            echo "FAIL: expected feature filter to match (ref-test-feature.txt was added on feature branch)"
+            exit 1
+          fi
+          echo "PASS"
+
+      - name: Assert docs filter did not match
+        env:
+          DOCS_MATCHED: ${{ steps.filter.outputs.docs }}
+        run: |
+          echo "docs matched: $DOCS_MATCHED"
+          if [ "$DOCS_MATCHED" != "false" ]; then
+            echo "FAIL: expected docs filter to not match"
+            exit 1
+          fi
+          echo "PASS"

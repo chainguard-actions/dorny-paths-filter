@@ -1,0 +1,72 @@
+name: Test working-directory input
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_EVENT_NAME: push
+      GITHUB_REF: refs/heads/act-harness
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          path: repo-subdir
+
+      - name: Set up git and commit a test file in the subdirectory checkout
+        id: setup
+        working-directory: repo-subdir
+        run: |
+          git config user.email "test@test.com"
+          git config user.name "Test"
+          # Capture the current HEAD SHA before making any changes
+          BASE_SHA=$(git rev-parse HEAD)
+          echo "base_sha=$BASE_SHA" >> "$GITHUB_OUTPUT"
+          echo "Base SHA: $BASE_SHA"
+          # Commit a new file
+          echo "workdir content" > workdir-test-file.txt
+          git add workdir-test-file.txt
+          git commit -m "add workdir test file"
+          echo "New HEAD: $(git rev-parse HEAD)"
+
+      - id: filter
+        uses: .
+        with:
+          token: ""
+          working-directory: repo-subdir
+          base: ${{ steps.setup.outputs.base_sha }}
+          filters: |
+            workdir:
+              - '**/workdir-test-file.txt'
+            docs:
+              - '**/*.md'
+
+      - name: Assert changes output is valid JSON array
+        env:
+          CHANGES: ${{ steps.filter.outputs.changes }}
+        run: |
+          echo "changes: $CHANGES"
+          echo "$CHANGES" | python3 -c "import sys, json; data = json.load(sys.stdin); assert isinstance(data, list), 'Expected JSON array'"
+          echo "PASS: changes is a valid JSON array"
+
+      - name: Assert workdir filter matched
+        env:
+          WORKDIR_MATCHED: ${{ steps.filter.outputs.workdir }}
+        run: |
+          echo "workdir matched: $WORKDIR_MATCHED"
+          if [ "$WORKDIR_MATCHED" != "true" ]; then
+            echo "FAIL: expected workdir filter to match (workdir-test-file.txt was added)"
+            exit 1
+          fi
+          echo "PASS"
+
+      - name: Assert docs filter did not match
+        env:
+          DOCS_MATCHED: ${{ steps.filter.outputs.docs }}
+        run: |
+          echo "docs matched: $DOCS_MATCHED"
+          if [ "$DOCS_MATCHED" != "false" ]; then
+            echo "FAIL: expected docs filter to not match"
+            exit 1
+          fi
+          echo "PASS"

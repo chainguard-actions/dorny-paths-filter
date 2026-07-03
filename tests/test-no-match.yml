@@ -1,0 +1,74 @@
+name: Test filters with no matching files
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_EVENT_NAME: push
+      GITHUB_REF: refs/heads/act-harness
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Create a non-matching file and commit it
+        id: setup
+        run: |
+          git config user.email "test@test.com"
+          git config user.name "Test"
+          # Capture the current HEAD SHA before making any changes
+          BASE_SHA=$(git rev-parse HEAD)
+          echo "base_sha=$BASE_SHA" >> "$GITHUB_OUTPUT"
+          echo "Base SHA: $BASE_SHA"
+          # Commit a plain text file (not .md, .js, or .ts)
+          echo "some data" > nomatch-data.txt
+          git add nomatch-data.txt
+          git commit -m "add data file"
+          echo "New HEAD: $(git rev-parse HEAD)"
+
+      - id: filter
+        uses: .
+        with:
+          token: ""
+          base: ${{ steps.setup.outputs.base_sha }}
+          filters: |
+            docs:
+              - '**/*.md'
+            src:
+              - '**/*.js'
+              - '**/*.ts'
+
+      - name: Assert docs filter did not match
+        env:
+          DOCS_MATCHED: ${{ steps.filter.outputs.docs }}
+        run: |
+          echo "docs matched: $DOCS_MATCHED"
+          if [ "$DOCS_MATCHED" != "false" ]; then
+            echo "FAIL: expected docs filter to not match"
+            exit 1
+          fi
+          echo "PASS"
+
+      - name: Assert src filter did not match
+        env:
+          SRC_MATCHED: ${{ steps.filter.outputs.src }}
+        run: |
+          echo "src matched: $SRC_MATCHED"
+          if [ "$SRC_MATCHED" != "false" ]; then
+            echo "FAIL: expected src filter to not match"
+            exit 1
+          fi
+          echo "PASS"
+
+      - name: Assert changes is empty array
+        env:
+          CHANGES: ${{ steps.filter.outputs.changes }}
+        run: |
+          echo "changes: $CHANGES"
+          COUNT=$(echo "$CHANGES" | python3 -c "import sys, json; data = json.load(sys.stdin); print(len(data))")
+          if [ "$COUNT" != "0" ]; then
+            echo "FAIL: expected empty changes array, got $COUNT items"
+            exit 1
+          fi
+          echo "PASS: changes is empty as expected"

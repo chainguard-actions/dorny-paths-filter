@@ -1,0 +1,70 @@
+name: Test detecting markdown file changes (push event)
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_EVENT_NAME: push
+      GITHUB_REF: refs/heads/act-harness
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Set up a markdown file change
+        id: setup
+        run: |
+          git config user.email "test@test.com"
+          git config user.name "Test"
+          # Capture the current HEAD SHA (this will be our base)
+          BASE_SHA=$(git rev-parse HEAD)
+          echo "base_sha=$BASE_SHA" >> "$GITHUB_OUTPUT"
+          echo "Base SHA: $BASE_SHA"
+          # Add a markdown file
+          echo "# New doc" > pr-test-new-doc.md
+          git add pr-test-new-doc.md
+          git commit -m "add markdown doc"
+          echo "New HEAD: $(git rev-parse HEAD)"
+
+      - id: filter
+        uses: .
+        with:
+          token: ""
+          base: ${{ steps.setup.outputs.base_sha }}
+          filters: |
+            docs:
+              - '**/*.md'
+            src:
+              - '**/*.js'
+              - '**/*.ts'
+
+      - name: Assert changes output is valid JSON array
+        env:
+          CHANGES: ${{ steps.filter.outputs.changes }}
+        run: |
+          echo "changes: $CHANGES"
+          echo "$CHANGES" | python3 -c "import sys, json; data = json.load(sys.stdin); assert isinstance(data, list), 'Expected JSON array'"
+          echo "PASS: changes is a valid JSON array"
+
+      - name: Assert docs filter matched
+        env:
+          DOCS_MATCHED: ${{ steps.filter.outputs.docs }}
+        run: |
+          echo "docs matched: $DOCS_MATCHED"
+          if [ "$DOCS_MATCHED" != "true" ]; then
+            echo "FAIL: expected docs filter to match (pr-test-new-doc.md was added)"
+            exit 1
+          fi
+          echo "PASS"
+
+      - name: Assert src filter did not match
+        env:
+          SRC_MATCHED: ${{ steps.filter.outputs.src }}
+        run: |
+          echo "src matched: $SRC_MATCHED"
+          if [ "$SRC_MATCHED" != "false" ]; then
+            echo "FAIL: expected src filter to not match"
+            exit 1
+          fi
+          echo "PASS"
