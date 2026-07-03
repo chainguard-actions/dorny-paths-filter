@@ -9,6 +9,7 @@ Hardened by [Chainguard](https://www.chainguard.dev) from the upstream action at
 | Version | Tag | Upstream commit |
 |---------|-----|-----------------|
 | v4.0.1 | [`v4.0.1`](https://github.com/chainguard-actions/dorny-paths-filter/tree/v4.0.1) | — |
+| v4.0.2 | [`v4.0.2`](https://github.com/chainguard-actions/dorny-paths-filter/tree/v4.0.2) | [`7b450ff`](https://github.com/dorny/paths-filter/commit/7b450fff21473bca461d4b92ce414b9d0420d706) |
 
 ## Privacy
 
