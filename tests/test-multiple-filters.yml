@@ -1,0 +1,74 @@
+name: Test multiple filters and changes output
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - id: filter
+        uses: .
+        with:
+          base: HEAD
+          filters: |
+            all_files:
+              - '**'
+            yaml_files:
+              - '**/*.yml'
+              - '**/*.yaml'
+            nonexistent:
+              - 'this-path-should-never-exist-abc123xyz/**.txt'
+
+      - name: Assert all_files output is boolean
+        env:
+          ALL_FILES: ${{ steps.filter.outputs.all_files }}
+        run: |
+          echo "all_files: $ALL_FILES"
+          if [ "$ALL_FILES" != "true" ] && [ "$ALL_FILES" != "false" ]; then
+            echo "FAIL: expected 'true' or 'false', got: $ALL_FILES"
+            exit 1
+          fi
+          echo "PASS"
+
+      - name: Assert yaml_files output is boolean
+        env:
+          YAML_FILES: ${{ steps.filter.outputs.yaml_files }}
+        run: |
+          echo "yaml_files: $YAML_FILES"
+          if [ "$YAML_FILES" != "true" ] && [ "$YAML_FILES" != "false" ]; then
+            echo "FAIL: expected 'true' or 'false', got: $YAML_FILES"
+            exit 1
+          fi
+          echo "PASS"
+
+      - name: Assert nonexistent filter is false
+        env:
+          NONEXISTENT: ${{ steps.filter.outputs.nonexistent }}
+        run: |
+          echo "nonexistent: $NONEXISTENT"
+          if [ "$NONEXISTENT" != "false" ]; then
+            echo "FAIL: expected 'false' for nonexistent filter, got: $NONEXISTENT"
+            exit 1
+          fi
+          echo "PASS: nonexistent filter correctly returned false"
+
+      - name: Assert changes is valid JSON and does not include nonexistent
+        env:
+          CHANGES: ${{ steps.filter.outputs.changes }}
+        run: |
+          echo "changes: $CHANGES"
+          # Must be valid JSON array
+          if ! echo "$CHANGES" | python3 -c "import sys, json; data=json.load(sys.stdin); assert isinstance(data, list)" 2>/dev/null; then
+            echo "FAIL: changes is not a valid JSON array: $CHANGES"
+            exit 1
+          fi
+          # nonexistent filter should not appear in changes
+          if echo "$CHANGES" | python3 -c "import sys, json; data=json.load(sys.stdin); assert 'nonexistent' not in data" 2>/dev/null; then
+            echo "PASS: nonexistent not in changes"
+          else
+            echo "FAIL: nonexistent filter should not be in changes"
+            exit 1
+          fi

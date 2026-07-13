@@ -1,0 +1,69 @@
+name: Test pull request scenario
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      # Simulate PR-like filtering by using base: HEAD (compares working tree vs HEAD)
+      # This tests the filter logic with multiple filter patterns
+      - id: filter
+        uses: .
+        with:
+          base: HEAD
+          filters: |
+            docs:
+              - '**/*.md'
+            src:
+              - '**/*.ts'
+              - '**/*.js'
+            any:
+              - '**'
+
+      - name: Assert changes output is valid JSON
+        env:
+          CHANGES: ${{ steps.filter.outputs.changes }}
+        run: |
+          echo "changes: $CHANGES"
+          if ! echo "$CHANGES" | python3 -c "import sys, json; data=json.load(sys.stdin); assert isinstance(data, list)" 2>/dev/null; then
+            echo "FAIL: changes is not a valid JSON array: $CHANGES"
+            exit 1
+          fi
+          echo "PASS: changes is a valid JSON array"
+
+      - name: Assert docs filter output is boolean-like
+        env:
+          DOCS: ${{ steps.filter.outputs.docs }}
+        run: |
+          echo "docs: $DOCS"
+          if [ "$DOCS" != "true" ] && [ "$DOCS" != "false" ]; then
+            echo "FAIL: expected 'true' or 'false', got: $DOCS"
+            exit 1
+          fi
+          echo "PASS"
+
+      - name: Assert src filter output is boolean-like
+        env:
+          SRC: ${{ steps.filter.outputs.src }}
+        run: |
+          echo "src: $SRC"
+          if [ "$SRC" != "true" ] && [ "$SRC" != "false" ]; then
+            echo "FAIL: expected 'true' or 'false', got: $SRC"
+            exit 1
+          fi
+          echo "PASS"
+
+      - name: Assert any filter output is boolean-like
+        env:
+          ANY: ${{ steps.filter.outputs.any }}
+        run: |
+          echo "any: $ANY"
+          if [ "$ANY" != "true" ] && [ "$ANY" != "false" ]; then
+            echo "FAIL: expected 'true' or 'false', got: $ANY"
+            exit 1
+          fi
+          echo "PASS"

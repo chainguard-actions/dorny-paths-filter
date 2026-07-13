@@ -1,0 +1,37 @@
+name: Test working-directory input
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_REF: refs/heads/main
+      GITHUB_EVENT_NAME: push
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          path: myrepo
+      - id: action
+        uses: .
+        with:
+          working-directory: myrepo
+          base: HEAD~1
+          filters: |
+            any:
+              - '**'
+      - name: Assert changes output is valid JSON array
+        env:
+          ACTUAL: ${{ steps.action.outputs.changes }}
+        run: |
+          echo "actual: $ACTUAL"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: changes output is empty"
+            exit 1
+          fi
+          # Validate it's a JSON array
+          echo "$ACTUAL" | python3 -c "import sys, json; data = json.load(sys.stdin); assert isinstance(data, list), 'Not a list'" || {
+            echo "FAIL: changes output is not a valid JSON array"
+            exit 1
+          }
+          echo "PASS: changes output is a valid JSON array: $ACTUAL"

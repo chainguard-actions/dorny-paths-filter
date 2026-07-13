@@ -1,0 +1,42 @@
+name: Test basic push scenario
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - id: filter
+        uses: .
+        with:
+          # base: HEAD compares working tree vs HEAD (no network calls needed)
+          base: HEAD
+          filters: |
+            any:
+              - '**'
+
+      - name: Assert changes output is a JSON array
+        env:
+          CHANGES: ${{ steps.filter.outputs.changes }}
+        run: |
+          echo "changes: $CHANGES"
+          # changes should be a valid JSON array (empty [] since working tree is clean)
+          if ! echo "$CHANGES" | python3 -c "import sys, json; data=json.load(sys.stdin); assert isinstance(data, list)" 2>/dev/null; then
+            echo "FAIL: changes output is not valid JSON array: $CHANGES"
+            exit 1
+          fi
+          echo "PASS: changes is valid JSON array"
+
+      - name: Assert any filter output is boolean-like
+        env:
+          ANY: ${{ steps.filter.outputs.any }}
+        run: |
+          echo "any: $ANY"
+          if [ "$ANY" != "true" ] && [ "$ANY" != "false" ]; then
+            echo "FAIL: expected 'true' or 'false', got: $ANY"
+            exit 1
+          fi
+          echo "PASS: any output is boolean-like"

@@ -1,0 +1,42 @@
+name: Test list-files json output
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - id: filter
+        uses: .
+        with:
+          base: HEAD
+          list-files: json
+          filters: |
+            any:
+              - '**'
+
+      - name: Assert any_files is a JSON array
+        env:
+          ANY_FILES: ${{ steps.filter.outputs.any_files }}
+        run: |
+          echo "any_files: $ANY_FILES"
+          # Should be a valid JSON array (possibly empty since working tree is clean)
+          if ! echo "$ANY_FILES" | python3 -c "import sys, json; data=json.load(sys.stdin); assert isinstance(data, list)" 2>/dev/null; then
+            echo "FAIL: any_files is not a valid JSON array: $ANY_FILES"
+            exit 1
+          fi
+          echo "PASS: any_files is a valid JSON array"
+
+      - name: Assert changes output is a JSON array
+        env:
+          CHANGES: ${{ steps.filter.outputs.changes }}
+        run: |
+          echo "changes: $CHANGES"
+          if ! echo "$CHANGES" | python3 -c "import sys, json; data=json.load(sys.stdin); assert isinstance(data, list)" 2>/dev/null; then
+            echo "FAIL: changes is not a valid JSON array: $CHANGES"
+            exit 1
+          fi
+          echo "PASS: changes is a valid JSON array"

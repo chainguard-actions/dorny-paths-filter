@@ -1,0 +1,66 @@
+name: Test predicate-quantifier option
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      # Test with predicate-quantifier: some (default behavior)
+      - id: filter-some
+        uses: .
+        with:
+          base: HEAD
+          predicate-quantifier: some
+          filters: |
+            any:
+              - '**'
+            impossible:
+              - 'this-file-does-not-exist-xyz123.txt'
+              - '**'
+
+      - name: Assert some quantifier - any filter output is boolean
+        env:
+          ANY: ${{ steps.filter-some.outputs.any }}
+        run: |
+          echo "any (some): $ANY"
+          if [ "$ANY" != "true" ] && [ "$ANY" != "false" ]; then
+            echo "FAIL: expected 'true' or 'false', got: $ANY"
+            exit 1
+          fi
+          echo "PASS"
+
+      - name: Assert changes output is valid JSON array
+        env:
+          CHANGES: ${{ steps.filter-some.outputs.changes }}
+        run: |
+          echo "changes: $CHANGES"
+          if ! echo "$CHANGES" | python3 -c "import sys, json; data=json.load(sys.stdin); assert isinstance(data, list)" 2>/dev/null; then
+            echo "FAIL: changes is not a valid JSON array: $CHANGES"
+            exit 1
+          fi
+          echo "PASS: changes is valid JSON"
+
+      # Test with predicate-quantifier: every
+      - id: filter-every
+        uses: .
+        with:
+          base: HEAD
+          predicate-quantifier: every
+          filters: |
+            any:
+              - '**'
+
+      - name: Assert every quantifier - any filter output is boolean
+        env:
+          ANY: ${{ steps.filter-every.outputs.any }}
+        run: |
+          echo "any (every): $ANY"
+          if [ "$ANY" != "true" ] && [ "$ANY" != "false" ]; then
+            echo "FAIL: expected 'true' or 'false', got: $ANY"
+            exit 1
+          fi
+          echo "PASS"

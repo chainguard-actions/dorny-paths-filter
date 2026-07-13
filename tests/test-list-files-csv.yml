@@ -1,0 +1,54 @@
+name: Test list-files csv output
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - id: filter
+        uses: .
+        with:
+          base: HEAD
+          list-files: csv
+          filters: |
+            any:
+              - '**'
+
+      - name: Assert any filter output is boolean-like
+        env:
+          ANY: ${{ steps.filter.outputs.any }}
+        run: |
+          echo "any: $ANY"
+          if [ "$ANY" != "true" ] && [ "$ANY" != "false" ]; then
+            echo "FAIL: expected 'true' or 'false', got: $ANY"
+            exit 1
+          fi
+          echo "PASS: any output is boolean-like"
+
+      - name: Assert changes output is valid JSON array
+        env:
+          CHANGES: ${{ steps.filter.outputs.changes }}
+        run: |
+          echo "changes: $CHANGES"
+          if ! echo "$CHANGES" | python3 -c "import sys, json; data=json.load(sys.stdin); assert isinstance(data, list)" 2>/dev/null; then
+            echo "FAIL: changes is not a valid JSON array: $CHANGES"
+            exit 1
+          fi
+          echo "PASS: changes is valid JSON"
+
+      - name: Assert any_files is a string (csv format, no raw newlines)
+        env:
+          ANY_FILES: ${{ steps.filter.outputs.any_files }}
+        run: |
+          echo "any_files (csv): $ANY_FILES"
+          # CSV format: should be a string (possibly empty if no changes)
+          # Verify it does not contain raw newlines
+          if printf '%s' "$ANY_FILES" | grep -q $'\n'; then
+            echo "FAIL: csv output should not contain raw newlines"
+            exit 1
+          fi
+          echo "PASS: any_files is in csv format (single line or empty)"
