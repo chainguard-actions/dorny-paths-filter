@@ -1,0 +1,71 @@
+name: Test list-files json format
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      # Create uncommitted files to match against
+      - name: Create files to simulate changes
+        run: |
+          mkdir -p docs
+          echo "# New doc" > docs/guide.md
+          echo "# Another doc" > docs/reference.md
+          git add docs/
+
+      - id: filter
+        uses: .
+        with:
+          base: HEAD
+          list-files: json
+          filters: |
+            docs:
+              - 'docs/**'
+            src:
+              - 'src/**'
+
+      - name: Assert docs filter matched with file list
+        env:
+          DOCS: ${{ steps.filter.outputs.docs }}
+          DOCS_FILES: ${{ steps.filter.outputs.docs_files }}
+          SRC: ${{ steps.filter.outputs.src }}
+          SRC_FILES: ${{ steps.filter.outputs.src_files }}
+          CHANGES: ${{ steps.filter.outputs.changes }}
+        run: |
+          echo "docs: $DOCS"
+          echo "docs_files: $DOCS_FILES"
+          echo "src: $SRC"
+          echo "src_files: $SRC_FILES"
+          echo "changes: $CHANGES"
+
+          # docs filter should match
+          if [ "$DOCS" != "true" ]; then
+            echo "FAIL: expected docs to be 'true' but got '$DOCS'"
+            exit 1
+          fi
+
+          # docs_files should be a JSON array containing the added files
+          if echo "$DOCS_FILES" | grep -q 'docs/guide.md'; then
+            echo "PASS: docs_files contains docs/guide.md"
+          else
+            echo "FAIL: expected docs_files to contain 'docs/guide.md', got '$DOCS_FILES'"
+            exit 1
+          fi
+
+          # src filter should not match
+          if [ "$SRC" != "false" ]; then
+            echo "FAIL: expected src to be 'false' but got '$SRC'"
+            exit 1
+          fi
+
+          # src_files should be empty JSON array
+          if [ "$SRC_FILES" = "[]" ] || [ -z "$SRC_FILES" ]; then
+            echo "PASS: src_files is empty as expected"
+          else
+            echo "FAIL: expected src_files to be empty, got '$SRC_FILES'"
+            exit 1
+          fi
+
+          echo "PASS"

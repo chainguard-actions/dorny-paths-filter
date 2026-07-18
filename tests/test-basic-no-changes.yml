@@ -1,0 +1,46 @@
+name: Test basic usage - no uncommitted changes
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: filter
+        uses: .
+        with:
+          # base: HEAD compares against uncommitted changes only (no git fetch needed)
+          base: HEAD
+          filters: |
+            src:
+              - 'src/**'
+            docs:
+              - '*.md'
+            tests:
+              - 'tests/**'
+
+      - name: Assert changes output is empty JSON array
+        env:
+          CHANGES: ${{ steps.filter.outputs.changes }}
+          SRC: ${{ steps.filter.outputs.src }}
+          DOCS: ${{ steps.filter.outputs.docs }}
+        run: |
+          echo "changes: $CHANGES"
+          echo "src: $SRC"
+          echo "docs: $DOCS"
+          # With base: HEAD and a clean checkout, no uncommitted changes exist
+          # so changes should be an empty JSON array
+          if [ "$CHANGES" != "[]" ]; then
+            echo "FAIL: expected changes to be '[]' but got '$CHANGES'"
+            exit 1
+          fi
+          if [ "$SRC" != "false" ]; then
+            echo "FAIL: expected src to be 'false' but got '$SRC'"
+            exit 1
+          fi
+          if [ "$DOCS" != "false" ]; then
+            echo "FAIL: expected docs to be 'false' but got '$DOCS'"
+            exit 1
+          fi
+          echo "PASS"

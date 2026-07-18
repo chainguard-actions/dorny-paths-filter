@@ -1,0 +1,57 @@
+name: Test list-files csv format
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      # Create uncommitted files to match against
+      - name: Create files to simulate changes
+        run: |
+          mkdir -p config
+          echo "key: value" > config/settings.yml
+          git add config/settings.yml
+
+      - id: filter
+        uses: .
+        with:
+          base: HEAD
+          list-files: csv
+          filters: |
+            config:
+              - 'config/**'
+
+      - name: Assert csv file list output
+        env:
+          CONFIG: ${{ steps.filter.outputs.config }}
+          CONFIG_FILES: ${{ steps.filter.outputs.config_files }}
+          CHANGES: ${{ steps.filter.outputs.changes }}
+        run: |
+          echo "config: $CONFIG"
+          echo "config_files: $CONFIG_FILES"
+          echo "changes: $CHANGES"
+
+          # config filter should match
+          if [ "$CONFIG" != "true" ]; then
+            echo "FAIL: expected config to be 'true' but got '$CONFIG'"
+            exit 1
+          fi
+          echo "PASS: config filter matched"
+
+          # config_files should be CSV containing the file
+          if echo "$CONFIG_FILES" | grep -q 'config/settings.yml'; then
+            echo "PASS: config_files contains config/settings.yml in CSV format"
+          else
+            echo "FAIL: expected config_files to contain 'config/settings.yml', got '$CONFIG_FILES'"
+            exit 1
+          fi
+
+          # changes should contain 'config'
+          if echo "$CHANGES" | grep -q '"config"'; then
+            echo "PASS: changes contains 'config'"
+          else
+            echo "FAIL: expected changes to contain 'config', got '$CHANGES'"
+            exit 1
+          fi

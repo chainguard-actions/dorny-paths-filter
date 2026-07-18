@@ -1,0 +1,54 @@
+name: Test filter matches uncommitted changes
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      # Create an uncommitted file so the filter has something to match
+      - name: Create a new file to simulate a change
+        run: |
+          mkdir -p src
+          echo "test content" > src/new-feature.ts
+          git add src/new-feature.ts
+
+      - id: filter
+        uses: .
+        with:
+          # base: HEAD compares against uncommitted (staged) changes
+          base: HEAD
+          filters: |
+            src:
+              - 'src/**'
+            docs:
+              - '*.md'
+
+      - name: Assert src filter matched
+        env:
+          CHANGES: ${{ steps.filter.outputs.changes }}
+          SRC: ${{ steps.filter.outputs.src }}
+          DOCS: ${{ steps.filter.outputs.docs }}
+        run: |
+          echo "changes: $CHANGES"
+          echo "src: $SRC"
+          echo "docs: $DOCS"
+          # src filter should match because we added src/new-feature.ts
+          if [ "$SRC" != "true" ]; then
+            echo "FAIL: expected src to be 'true' but got '$SRC'"
+            exit 1
+          fi
+          # docs filter should not match
+          if [ "$DOCS" != "false" ]; then
+            echo "FAIL: expected docs to be 'false' but got '$DOCS'"
+            exit 1
+          fi
+          # changes should contain 'src'
+          if echo "$CHANGES" | grep -q '"src"'; then
+            echo "PASS: changes contains 'src'"
+          else
+            echo "FAIL: expected changes to contain 'src', got '$CHANGES'"
+            exit 1
+          fi
+          echo "PASS"

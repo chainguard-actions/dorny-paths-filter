@@ -1,0 +1,61 @@
+name: Test filters from config file
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      # Create a filter config file and a file to match
+      - name: Create filter config file and a changed file
+        run: |
+          # Create the filter config file
+          cat > /tmp/filters.yml << 'EOF'
+          action_files:
+            - 'action/**'
+          test_files:
+            - 'tests/**'
+          EOF
+
+          # Create a new test file to trigger the test_files filter
+          echo "# new test" > tests/new-test-fixture.txt
+          git add tests/new-test-fixture.txt
+
+      - id: filter
+        uses: .
+        with:
+          base: HEAD
+          filters: /tmp/filters.yml
+
+      - name: Assert filter from file works
+        env:
+          ACTION_FILES: ${{ steps.filter.outputs.action_files }}
+          TEST_FILES: ${{ steps.filter.outputs.test_files }}
+          CHANGES: ${{ steps.filter.outputs.changes }}
+        run: |
+          echo "action_files: $ACTION_FILES"
+          echo "test_files: $TEST_FILES"
+          echo "changes: $CHANGES"
+
+          # test_files filter should match because we added tests/new-test-fixture.txt
+          if [ "$TEST_FILES" != "true" ]; then
+            echo "FAIL: expected test_files to be 'true' but got '$TEST_FILES'"
+            exit 1
+          fi
+          echo "PASS: test_files filter matched correctly"
+
+          # action_files filter should not match
+          if [ "$ACTION_FILES" != "false" ]; then
+            echo "FAIL: expected action_files to be 'false' but got '$ACTION_FILES'"
+            exit 1
+          fi
+          echo "PASS: action_files filter correctly returned false"
+
+          # changes should contain 'test_files'
+          if echo "$CHANGES" | grep -q '"test_files"'; then
+            echo "PASS: changes contains 'test_files'"
+          else
+            echo "FAIL: expected changes to contain 'test_files', got '$CHANGES'"
+            exit 1
+          fi

@@ -1,0 +1,57 @@
+name: Test predicate-quantifier every
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      # Create only a src file (not a test file)
+      - name: Create src file but not test file
+        run: |
+          mkdir -p src
+          echo "feature code" > src/feature.ts
+          git add src/feature.ts
+
+      - id: filter-some
+        uses: .
+        with:
+          base: HEAD
+          predicate-quantifier: some
+          filters: |
+            src_and_test:
+              - 'src/**'
+              - 'tests/**'
+
+      - id: filter-every
+        uses: .
+        with:
+          base: HEAD
+          predicate-quantifier: every
+          filters: |
+            src_and_test:
+              - 'src/**'
+              - 'tests/**'
+
+      - name: Assert predicate-quantifier behavior
+        env:
+          SOME_RESULT: ${{ steps.filter-some.outputs.src_and_test }}
+          EVERY_RESULT: ${{ steps.filter-every.outputs.src_and_test }}
+        run: |
+          echo "some result: $SOME_RESULT"
+          echo "every result: $EVERY_RESULT"
+
+          # With 'some': src_and_test should be true because src/** matches
+          if [ "$SOME_RESULT" != "true" ]; then
+            echo "FAIL: expected some result to be 'true' (src/** matches), got '$SOME_RESULT'"
+            exit 1
+          fi
+          echo "PASS: some quantifier correctly returns true when at least one pattern matches"
+
+          # With 'every': src_and_test should be false because tests/** does NOT match
+          if [ "$EVERY_RESULT" != "false" ]; then
+            echo "FAIL: expected every result to be 'false' (tests/** does not match), got '$EVERY_RESULT'"
+            exit 1
+          fi
+          echo "PASS: every quantifier correctly returns false when not all patterns match"
