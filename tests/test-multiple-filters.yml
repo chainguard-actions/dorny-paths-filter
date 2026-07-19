@@ -1,4 +1,4 @@
-name: Test multiple filters and changes output
+name: Test multiple filters
 on:
   workflow_dispatch:
 jobs:
@@ -9,66 +9,78 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Create test files and commit
+        run: |
+          git config user.email "test@example.com"
+          git config user.name "Test User"
+          mkdir -p src docs
+          echo "console.log('hello');" > src/app.js
+          echo "# Documentation" > docs/readme.md
+          git add src/app.js docs/readme.md
+          git commit -m "test: add js and md files for filter test"
+
+      - name: Get base SHA (commit before the test commit)
+        id: get-sha
+        run: |
+          echo "sha=$(git rev-parse HEAD~1)" >> "$GITHUB_OUTPUT"
+
       - id: filter
         uses: .
         with:
-          base: HEAD
+          base: ${{ steps.get-sha.outputs.sha }}
           filters: |
-            all_files:
-              - '**'
-            yaml_files:
-              - '**/*.yml'
-              - '**/*.yaml'
-            nonexistent:
-              - 'this-path-should-never-exist-abc123xyz/**.txt'
+            javascript:
+              - '**/*.js'
+            markdown:
+              - '**/*.md'
+            python:
+              - '**/*.py'
 
-      - name: Assert all_files output is boolean
+      - name: Assert javascript filter matched
         env:
-          ALL_FILES: ${{ steps.filter.outputs.all_files }}
+          JS_MATCHED: ${{ steps.filter.outputs.javascript }}
+          CHANGES: ${{ steps.filter.outputs.changes }}
         run: |
-          echo "all_files: $ALL_FILES"
-          if [ "$ALL_FILES" != "true" ] && [ "$ALL_FILES" != "false" ]; then
-            echo "FAIL: expected 'true' or 'false', got: $ALL_FILES"
+          echo "changes: $CHANGES"
+          echo "javascript matched: $JS_MATCHED"
+          if [ "$JS_MATCHED" != "true" ]; then
+            echo "FAIL: expected javascript filter to match (src/app.js was added)"
             exit 1
           fi
-          echo "PASS"
+          echo "PASS: javascript filter matched"
 
-      - name: Assert yaml_files output is boolean
+      - name: Assert markdown filter matched
         env:
-          YAML_FILES: ${{ steps.filter.outputs.yaml_files }}
+          MD_MATCHED: ${{ steps.filter.outputs.markdown }}
         run: |
-          echo "yaml_files: $YAML_FILES"
-          if [ "$YAML_FILES" != "true" ] && [ "$YAML_FILES" != "false" ]; then
-            echo "FAIL: expected 'true' or 'false', got: $YAML_FILES"
+          echo "markdown matched: $MD_MATCHED"
+          if [ "$MD_MATCHED" != "true" ]; then
+            echo "FAIL: expected markdown filter to match (docs/readme.md was added)"
             exit 1
           fi
-          echo "PASS"
+          echo "PASS: markdown filter matched"
 
-      - name: Assert nonexistent filter is false
+      - name: Assert python filter did not match
         env:
-          NONEXISTENT: ${{ steps.filter.outputs.nonexistent }}
+          PY_MATCHED: ${{ steps.filter.outputs.python }}
         run: |
-          echo "nonexistent: $NONEXISTENT"
-          if [ "$NONEXISTENT" != "false" ]; then
-            echo "FAIL: expected 'false' for nonexistent filter, got: $NONEXISTENT"
+          echo "python matched: $PY_MATCHED"
+          if [ "$PY_MATCHED" != "false" ]; then
+            echo "FAIL: expected python filter NOT to match (no .py files changed)"
             exit 1
           fi
-          echo "PASS: nonexistent filter correctly returned false"
+          echo "PASS: python filter did not match"
 
-      - name: Assert changes is valid JSON and does not include nonexistent
+      - name: Assert changes JSON array contains javascript and markdown but not python
         env:
           CHANGES: ${{ steps.filter.outputs.changes }}
         run: |
           echo "changes: $CHANGES"
-          # Must be valid JSON array
-          if ! echo "$CHANGES" | python3 -c "import sys, json; data=json.load(sys.stdin); assert isinstance(data, list)" 2>/dev/null; then
-            echo "FAIL: changes is not a valid JSON array: $CHANGES"
-            exit 1
-          fi
-          # nonexistent filter should not appear in changes
-          if echo "$CHANGES" | python3 -c "import sys, json; data=json.load(sys.stdin); assert 'nonexistent' not in data" 2>/dev/null; then
-            echo "PASS: nonexistent not in changes"
-          else
-            echo "FAIL: nonexistent filter should not be in changes"
-            exit 1
-          fi
+          python3 - <<'PYEOF'
+          import sys, json, os
+          data = json.loads(os.environ['CHANGES'])
+          assert 'javascript' in data, 'javascript not in changes: ' + str(data)
+          assert 'markdown' in data, 'markdown not in changes: ' + str(data)
+          assert 'python' not in data, 'python should not be in changes: ' + str(data)
+          print('PASS: changes array is correct')
+          PYEOF

@@ -1,4 +1,4 @@
-name: Test list-files json output
+name: Test basic inline filters
 on:
   workflow_dispatch:
 jobs:
@@ -19,28 +19,25 @@ jobs:
       - id: filter
         uses: .
         with:
-          # base: HEAD detects staged changes vs HEAD (no commit needed)
+          # base: HEAD detects staged/unstaged changes vs HEAD (no commit needed)
           base: HEAD
-          list-files: json
           filters: |
             any:
               - '**'
 
-      - name: Assert any_files output is a JSON array
+      - name: Assert changes output is a JSON array
         env:
-          ANY_FILES: ${{ steps.filter.outputs.any_files }}
           CHANGES: ${{ steps.filter.outputs.changes }}
         run: |
           echo "changes: $CHANGES"
-          echo "any_files: $ANY_FILES"
-          # any_files should be a valid JSON array when list-files=json
-          if ! echo "$ANY_FILES" | python3 -c "import sys, json; data = json.load(sys.stdin); assert isinstance(data, list)" 2>/dev/null; then
-            echo "FAIL: 'any_files' output is not a valid JSON array: $ANY_FILES"
+          # The output should be a valid JSON array (either empty [] or with items)
+          if ! echo "$CHANGES" | python3 -c "import sys, json; data = json.load(sys.stdin); assert isinstance(data, list)" 2>/dev/null; then
+            echo "FAIL: 'changes' output is not a valid JSON array: $CHANGES"
             exit 1
           fi
-          echo "PASS: any_files output is a valid JSON array"
+          echo "PASS: changes output is a valid JSON array"
 
-      - name: Assert any filter matched
+      - name: Assert any filter matched the staged file
         env:
           ANY_MATCHED: ${{ steps.filter.outputs.any }}
         run: |

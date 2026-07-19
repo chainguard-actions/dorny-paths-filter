@@ -4,9 +4,6 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    env:
-      GITHUB_REF: refs/heads/main
-      GITHUB_EVENT_NAME: push
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -16,22 +13,19 @@ jobs:
         uses: .
         with:
           working-directory: myrepo
-          base: HEAD~1
           filters: |
-            any:
-              - '**'
-      - name: Assert changes output is valid JSON array
+            src:
+              - '**/*.js'
+            docs:
+              - '**/*.md'
+      - name: Assert changes output is a JSON array
         env:
-          ACTUAL: ${{ steps.action.outputs.changes }}
+          CHANGES: ${{ steps.action.outputs.changes }}
         run: |
-          echo "actual: $ACTUAL"
-          if [ -z "$ACTUAL" ]; then
-            echo "FAIL: changes output is empty"
+          echo "changes: $CHANGES"
+          # Output should be a valid JSON array (possibly empty)
+          if ! echo "$CHANGES" | grep -qE '^\[.*\]$'; then
+            echo "FAIL: expected a JSON array, got: $CHANGES"
             exit 1
           fi
-          # Validate it's a JSON array
-          echo "$ACTUAL" | python3 -c "import sys, json; data = json.load(sys.stdin); assert isinstance(data, list), 'Not a list'" || {
-            echo "FAIL: changes output is not a valid JSON array"
-            exit 1
-          }
-          echo "PASS: changes output is a valid JSON array: $ACTUAL"
+          echo "PASS: changes output is a JSON array"

@@ -9,46 +9,53 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Create test files and commit
+        run: |
+          git config user.email "test@example.com"
+          git config user.name "Test User"
+          mkdir -p src
+          echo "console.log('a');" > src/a.js
+          echo "console.log('b');" > src/b.js
+          git add src/a.js src/b.js
+          git commit -m "test: add js files for csv filter test"
+
+      - name: Get base SHA (commit before the test commit)
+        id: get-sha
+        run: |
+          echo "sha=$(git rev-parse HEAD~1)" >> "$GITHUB_OUTPUT"
+
       - id: filter
         uses: .
         with:
-          base: HEAD
+          base: ${{ steps.get-sha.outputs.sha }}
           list-files: csv
           filters: |
-            any:
-              - '**'
+            javascript:
+              - '**/*.js'
 
-      - name: Assert any filter output is boolean-like
+      - name: Assert javascript filter matched
         env:
-          ANY: ${{ steps.filter.outputs.any }}
+          JS_MATCHED: ${{ steps.filter.outputs.javascript }}
         run: |
-          echo "any: $ANY"
-          if [ "$ANY" != "true" ] && [ "$ANY" != "false" ]; then
-            echo "FAIL: expected 'true' or 'false', got: $ANY"
+          echo "javascript matched: $JS_MATCHED"
+          if [ "$JS_MATCHED" != "true" ]; then
+            echo "FAIL: expected javascript filter to match"
             exit 1
           fi
-          echo "PASS: any output is boolean-like"
+          echo "PASS: javascript filter matched"
 
-      - name: Assert changes output is valid JSON array
+      - name: Assert javascript_files is non-empty CSV
         env:
-          CHANGES: ${{ steps.filter.outputs.changes }}
+          JS_FILES: ${{ steps.filter.outputs.javascript_files }}
         run: |
-          echo "changes: $CHANGES"
-          if ! echo "$CHANGES" | python3 -c "import sys, json; data=json.load(sys.stdin); assert isinstance(data, list)" 2>/dev/null; then
-            echo "FAIL: changes is not a valid JSON array: $CHANGES"
+          echo "javascript_files: $JS_FILES"
+          if [ -z "$JS_FILES" ]; then
+            echo "FAIL: expected javascript_files to be non-empty CSV"
             exit 1
           fi
-          echo "PASS: changes is valid JSON"
-
-      - name: Assert any_files is a string (csv format, no raw newlines)
-        env:
-          ANY_FILES: ${{ steps.filter.outputs.any_files }}
-        run: |
-          echo "any_files (csv): $ANY_FILES"
-          # CSV format: should be a string (possibly empty if no changes)
-          # Verify it does not contain raw newlines
-          if printf '%s' "$ANY_FILES" | grep -q $'\n'; then
-            echo "FAIL: csv output should not contain raw newlines"
+          # Should contain at least one .js file
+          if ! echo "$JS_FILES" | grep -q "\.js"; then
+            echo "FAIL: expected javascript_files to contain .js files, got: $JS_FILES"
             exit 1
           fi
-          echo "PASS: any_files is in csv format (single line or empty)"
+          echo "PASS: javascript_files is non-empty CSV containing .js files"
