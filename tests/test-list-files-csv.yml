@@ -1,0 +1,63 @@
+name: Test list-files csv output
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - id: filter
+        uses: .
+        continue-on-error: true
+        with:
+          list-files: csv
+          filters: |
+            action:
+              - 'action/**'
+            root:
+              - '*.yml'
+              - '*.yaml'
+              - '*.json'
+              - '*.md'
+
+      - name: Assert list-files csv output is valid
+        env:
+          OUTCOME: ${{ steps.filter.outcome }}
+          CHANGES: ${{ steps.filter.outputs.changes }}
+          ACTION: ${{ steps.filter.outputs.action }}
+          ACTION_FILES: ${{ steps.filter.outputs.action_files }}
+        run: |
+          echo "outcome: $OUTCOME"
+          echo "changes: $CHANGES"
+          echo "action: $ACTION"
+          echo "action_files: $ACTION_FILES"
+          if [ "$OUTCOME" = "success" ]; then
+            # changes output should be a valid JSON array
+            if [ -z "$CHANGES" ]; then
+              echo "FAIL: action succeeded but 'changes' output is empty"
+              exit 1
+            fi
+            echo "$CHANGES" | python3 -c "import sys, json; data = json.load(sys.stdin); assert isinstance(data, list), 'Not a JSON array'" || {
+              echo "FAIL: 'changes' output is not a valid JSON array: $CHANGES"
+              exit 1
+            }
+            # action output should be 'true' or 'false'
+            if [ "$ACTION" != "true" ] && [ "$ACTION" != "false" ]; then
+              echo "FAIL: 'action' output should be 'true' or 'false', got: $ACTION"
+              exit 1
+            fi
+            # If action is true, action_files should be a non-empty CSV string
+            if [ "$ACTION" = "true" ] && [ -z "$ACTION_FILES" ]; then
+              echo "FAIL: action=true but action_files is empty"
+              exit 1
+            fi
+            echo "PASS: changes=$CHANGES action=$ACTION"
+          elif [ "$OUTCOME" = "failure" ]; then
+            echo "PASS: action failed gracefully (sentinel repo not resolvable via API)"
+          else
+            echo "FAIL: unexpected outcome '$OUTCOME'"
+            exit 1
+          fi

@@ -1,0 +1,37 @@
+name: Test working-directory input
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Set up a subdirectory checkout
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/subdir"
+          cp -r "$GITHUB_WORKSPACE/." "$GITHUB_WORKSPACE/subdir/" 2>/dev/null || true
+
+      - id: action
+        uses: .
+        with:
+          working-directory: subdir
+          filters: |
+            any:
+              - '**'
+
+      - name: Assert changes output is set
+        env:
+          CHANGES: ${{ steps.action.outputs.changes }}
+          ANY: ${{ steps.action.outputs.any }}
+        run: |
+          echo "changes: $CHANGES"
+          echo "any: $ANY"
+          # The action should produce a valid JSON array for changes output
+          if [ -z "$CHANGES" ]; then
+            echo "FAIL: changes output is empty"
+            exit 1
+          fi
+          echo "PASS: working-directory input accepted and action produced output"

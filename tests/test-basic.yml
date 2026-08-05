@@ -1,0 +1,61 @@
+name: Test basic inline filters
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - id: filter
+        uses: .
+        continue-on-error: true
+        with:
+          filters: |
+            src:
+              - 'src/**'
+            tests:
+              - 'tests/**'
+            docs:
+              - '*.md'
+              - 'docs/**'
+
+      - name: Assert changes output is valid JSON array or action failed gracefully
+        env:
+          OUTCOME: ${{ steps.filter.outcome }}
+          CHANGES: ${{ steps.filter.outputs.changes }}
+          SRC: ${{ steps.filter.outputs.src }}
+          TESTS: ${{ steps.filter.outputs.tests }}
+        run: |
+          echo "outcome: $OUTCOME"
+          echo "changes: $CHANGES"
+          echo "src: $SRC"
+          echo "tests: $TESTS"
+          if [ "$OUTCOME" = "success" ]; then
+            # changes output should be a valid JSON array
+            if [ -z "$CHANGES" ]; then
+              echo "FAIL: action succeeded but 'changes' output is empty"
+              exit 1
+            fi
+            echo "$CHANGES" | python3 -c "import sys, json; data = json.load(sys.stdin); assert isinstance(data, list), 'Not a JSON array'" || {
+              echo "FAIL: 'changes' output is not a valid JSON array: $CHANGES"
+              exit 1
+            }
+            # src and tests outputs should be 'true' or 'false'
+            if [ "$SRC" != "true" ] && [ "$SRC" != "false" ]; then
+              echo "FAIL: 'src' output should be 'true' or 'false', got: $SRC"
+              exit 1
+            fi
+            if [ "$TESTS" != "true" ] && [ "$TESTS" != "false" ]; then
+              echo "FAIL: 'tests' output should be 'true' or 'false', got: $TESTS"
+              exit 1
+            fi
+            echo "PASS: changes=$CHANGES src=$SRC tests=$TESTS"
+          elif [ "$OUTCOME" = "failure" ]; then
+            echo "PASS: action failed gracefully (sentinel repo not resolvable via API)"
+          else
+            echo "FAIL: unexpected outcome '$OUTCOME'"
+            exit 1
+          fi

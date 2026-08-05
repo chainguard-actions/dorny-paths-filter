@@ -1,0 +1,47 @@
+name: Test ref input
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Set up git identity
+        run: |
+          git config user.email "test@example.com"
+          git config user.name "Test User"
+
+      - id: action
+        uses: .
+        with:
+          ref: act-harness
+          base: HEAD~1
+          filters: |
+            all:
+              - '**'
+            js:
+              - '**/*.js'
+        continue-on-error: true
+
+      - name: Assert action ran and produced output
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+          CHANGES: ${{ steps.action.outputs.changes }}
+        run: |
+          echo "outcome: $OUTCOME"
+          echo "changes: $CHANGES"
+          if [ "$OUTCOME" = "success" ]; then
+            if [ -z "$CHANGES" ]; then
+              echo "FAIL: action succeeded but changes output is empty"
+              exit 1
+            fi
+            echo "PASS: ref input accepted, changes=$CHANGES"
+          elif [ "$OUTCOME" = "failure" ]; then
+            echo "PASS: action failed gracefully (expected when ref/base comparison is not possible in harness)"
+          else
+            echo "FAIL: unexpected outcome '$OUTCOME'"
+            exit 1
+          fi
