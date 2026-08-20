@@ -1,0 +1,66 @@
+name: Test predicate-quantifier input
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - id: filter-some
+        uses: .
+        with:
+          base: HEAD
+          ref: HEAD
+          predicate-quantifier: 'some'
+          filters: |
+            docs:
+              - '**/*.md'
+              - '**/*.txt'
+
+      - name: Assert some-quantifier filter outputs are boolean
+        env:
+          DOCS: ${{ steps.filter-some.outputs.docs }}
+          CHANGES: ${{ steps.filter-some.outputs.changes }}
+        run: |
+          echo "docs (some): $DOCS"
+          echo "changes: $CHANGES"
+          if [ "$DOCS" != "true" ] && [ "$DOCS" != "false" ]; then
+            echo "FAIL: docs output '$DOCS' is not a valid boolean string"
+            exit 1
+          fi
+          echo "$CHANGES" | python3 -c "import sys, json; v = json.load(sys.stdin); assert isinstance(v, list)" || {
+            echo "FAIL: changes is not a valid JSON array"
+            exit 1
+          }
+          echo "PASS: predicate-quantifier=some produces valid outputs"
+
+      - id: filter-every
+        uses: .
+        with:
+          base: HEAD
+          ref: HEAD
+          predicate-quantifier: 'every'
+          filters: |
+            docs:
+              - '**/*.md'
+              - '**/*.txt'
+
+      - name: Assert every-quantifier filter outputs are boolean
+        env:
+          DOCS: ${{ steps.filter-every.outputs.docs }}
+          CHANGES: ${{ steps.filter-every.outputs.changes }}
+        run: |
+          echo "docs (every): $DOCS"
+          echo "changes: $CHANGES"
+          if [ "$DOCS" != "true" ] && [ "$DOCS" != "false" ]; then
+            echo "FAIL: docs output '$DOCS' is not a valid boolean string"
+            exit 1
+          fi
+          echo "$CHANGES" | python3 -c "import sys, json; v = json.load(sys.stdin); assert isinstance(v, list)" || {
+            echo "FAIL: changes is not a valid JSON array"
+            exit 1
+          }
+          echo "PASS: predicate-quantifier=every produces valid outputs"

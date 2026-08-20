@@ -1,0 +1,55 @@
+name: Test basic usage - inline filters
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - id: filter
+        uses: .
+        with:
+          # Use base: HEAD so it compares HEAD against itself — no changes expected
+          # This avoids needing a real remote fetch and works under act
+          base: HEAD
+          ref: HEAD
+          filters: |
+            src:
+              - 'src/**'
+            action:
+              - 'action.yml'
+              - 'action/**'
+            tests:
+              - 'tests/**'
+
+      - name: Assert changes output is a valid JSON array
+        env:
+          CHANGES: ${{ steps.filter.outputs.changes }}
+        run: |
+          echo "changes: $CHANGES"
+          # Must be a valid JSON array
+          echo "$CHANGES" | python3 -c "import sys, json; v = json.load(sys.stdin); assert isinstance(v, list), 'Not a list'" || {
+            echo "FAIL: changes output is not a valid JSON array"
+            exit 1
+          }
+          echo "PASS: changes is a valid JSON array: $CHANGES"
+
+      - name: Assert filter outputs are boolean strings
+        env:
+          SRC: ${{ steps.filter.outputs.src }}
+          ACTION: ${{ steps.filter.outputs.action }}
+          TESTS: ${{ steps.filter.outputs.tests }}
+        run: |
+          echo "src: $SRC"
+          echo "action: $ACTION"
+          echo "tests: $TESTS"
+          for val in "$SRC" "$ACTION" "$TESTS"; do
+            if [ "$val" != "true" ] && [ "$val" != "false" ]; then
+              echo "FAIL: filter output '$val' is not 'true' or 'false'"
+              exit 1
+            fi
+          done
+          echo "PASS: all filter outputs are valid boolean strings"

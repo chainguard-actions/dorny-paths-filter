@@ -1,0 +1,43 @@
+name: Test list-files output format
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - id: filter
+        uses: .
+        with:
+          base: HEAD
+          ref: HEAD
+          list-files: json
+          filters: |
+            all:
+              - '**'
+
+      - name: Assert changes output is a valid JSON array
+        env:
+          CHANGES: ${{ steps.filter.outputs.changes }}
+        run: |
+          echo "changes: $CHANGES"
+          echo "$CHANGES" | python3 -c "import sys, json; v = json.load(sys.stdin); assert isinstance(v, list), 'Not a list'" || {
+            echo "FAIL: changes output is not a valid JSON array"
+            exit 1
+          }
+          echo "PASS: changes is a valid JSON array"
+
+      - name: Assert all_files output is a valid JSON array (even if empty)
+        env:
+          ALL_FILES: ${{ steps.filter.outputs.all_files }}
+        run: |
+          echo "all_files: $ALL_FILES"
+          # When list-files is json, the <filter>_files output should be a JSON array
+          echo "$ALL_FILES" | python3 -c "import sys, json; v = json.load(sys.stdin); assert isinstance(v, list), 'Not a list'" || {
+            echo "FAIL: all_files output is not a valid JSON array"
+            exit 1
+          }
+          echo "PASS: all_files is a valid JSON array"

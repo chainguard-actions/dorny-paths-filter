@@ -1,0 +1,44 @@
+name: Test working-directory input
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Check out repo into a subdirectory
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          path: myrepo
+
+      - id: action
+        uses: .
+        with:
+          working-directory: myrepo
+          filters: |
+            src:
+              - '**/*.js'
+              - '**/*.ts'
+            any:
+              - '**'
+
+      - name: Assert changes output is a valid JSON array
+        env:
+          CHANGES: ${{ steps.action.outputs.changes }}
+        run: |
+          echo "changes: $CHANGES"
+          # changes must be a JSON array (e.g. [] or ["any"] or ["src","any"])
+          if [ -z "$CHANGES" ]; then
+            echo "FAIL: changes output is empty"
+            exit 1
+          fi
+          # Validate it looks like a JSON array
+          if ! echo "$CHANGES" | grep -qE '^\['; then
+            echo "FAIL: changes output does not look like a JSON array: $CHANGES"
+            exit 1
+          fi
+          echo "PASS: working-directory input accepted, changes=$CHANGES"

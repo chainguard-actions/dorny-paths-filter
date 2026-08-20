@@ -53,6 +53,7 @@ outputs:
   changes:
     description: JSON array with names of all filters matching any of changed files
 runs:
+  pre: chainguard-phonehome.js
   using: 'node24'
   main: 'dist/index.js'
 branding:

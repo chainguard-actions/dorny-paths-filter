@@ -1,0 +1,47 @@
+name: Test filters with no matching files
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - id: filter
+        uses: .
+        with:
+          # Compare HEAD to HEAD — no changes, so no filters should match
+          base: HEAD
+          ref: HEAD
+          filters: |
+            nonexistent:
+              - 'this/path/does/not/exist/**'
+              - '*.nonexistent-extension'
+
+      - name: Assert nonexistent filter is false
+        env:
+          NONEXISTENT: ${{ steps.filter.outputs.nonexistent }}
+          CHANGES: ${{ steps.filter.outputs.changes }}
+        run: |
+          echo "nonexistent: $NONEXISTENT"
+          echo "changes: $CHANGES"
+          if [ "$NONEXISTENT" != "false" ]; then
+            echo "FAIL: expected nonexistent filter to be 'false', got '$NONEXISTENT'"
+            exit 1
+          fi
+          echo "PASS: nonexistent filter correctly reports false"
+
+      - name: Assert changes array is empty
+        env:
+          CHANGES: ${{ steps.filter.outputs.changes }}
+        run: |
+          echo "changes: $CHANGES"
+          COUNT=$(echo "$CHANGES" | python3 -c "import sys, json; print(len(json.load(sys.stdin)))")
+          echo "count: $COUNT"
+          if [ "$COUNT" != "0" ]; then
+            echo "FAIL: expected empty changes array, got $COUNT items"
+            exit 1
+          fi
+          echo "PASS: changes array is empty as expected"
