@@ -4,8 +4,13 @@
   "version": "v4.0.2",
   "commit_sha": "7b450fff21473bca461d4b92ce414b9d0420d706",
   "url": "https://github.com/dorny/paths-filter",
-  "policy_sha": "d636be7e43ef829af6e853da6b3c7566db9f72fe",
+  "policy_sha": "374911c4be584df24e6da57af2d990570ef0f859",
   "test_policy_sha": "843adf9e4b8f85d0c08b27b9d0b09dd094b54702",
   "test_agent_version": "2",
-  "harden_agent_version": "2"
+  "harden_agent_version": "2",
+  "dist_artifact": {
+    "gcs_uri": "gs://patch-actions-node-artifacts/dist-artifacts/dorny/paths-filter/v4.0.2/sha256-c9243dafff306c47406624a0ed25450244bc9a5f041a2f750826f3266e70c26a.tar.gz",
+    "sha256": "c9243dafff306c47406624a0ed25450244bc9a5f041a2f750826f3266e70c26a",
+    "size_bytes": 319337
+  }
 }
